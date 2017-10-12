@@ -1,9 +1,5 @@
 # MultiCache
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/multi_cache`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
-
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -22,17 +18,48 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+After installing, the gem:
+
+ Create config/initializers/init_multi_cache.rb
+ and add the lines
+
+     MultiCache.configure do |config|
+       config.redis_instance "<redis-instance>"
+     end
+
+   where <redis-instance> is the Redis::Namespace object to be used by 
+   MultiCache for caching
+   Please ensure that the <redis-instance> is wrapped in quotes
+   
+
+All models where you want to use MultiCache must:
+ 
+ [mandatory]   Define a CLASS method
+               MULTI_CACHE_PREFIXES
+                 that returns an array of allowed cache prefixes used by
+                 the class   
+ 
+ [mandatory]   Define a CLASS method 
+               GEN_CACHE_CONTENT(ID_OR_OBJ, CACHE_PREFIX)
+                 that generates a hash that will be cached
+                 ID_OR_OBJ is a hash that contains 
+                   {:id => obj_id, :obj => actual_obj_if_available}
+               CACHE_PREFIX is an optional string that can be used to 
+                 distinguish between different cached info for the same
+                 object.
+
+ [optional]    Define a CLASS method 
+               PARSE_CACHE_CONTENT(CONTENT, CACHE_PREFIX)
+                 that parses the cached content once it is read from 
+                 redis. Sometimes some JSON.parses are required. If not
+                 defined, the default method is called (which simply returns
+                 the cached value as-is)
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/multi_cache. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
+Bug reports and pull requests are welcome on GitHub at https://github.com/peerlearning/multi_cache. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
 
 
 ## License
