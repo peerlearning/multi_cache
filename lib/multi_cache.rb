@@ -1,7 +1,19 @@
 require "multi_cache/version"
+require "multi_cache/redis_helpers"
+require "multi_cache/invalidation/sidekiq"
+require "multi_cache/invalidation/blocking"
 
 module MultiCache
   extend ActiveSupport::Concern
+  include MultiCache::RedisHelpers
+  extend MultiCache::Invalidation::Blocking
+
+  # TODO::
+  #   > Allow other data types rather than just hashes
+  #   > Allow destruction of specific cache prefixes - currently all get destroyed
+  #   > Fails in case MultiCache is included in the base class. BaseClass is stored
+  #     in the key, whereas it is accessed via derived class and vice versa
+  # => Non-ID keys can't be destroyed
 
   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
   # 
@@ -59,11 +71,13 @@ module MultiCache
 
   def self.get_redis
     if @redis.blank?
-      @redis = eval(@@multicache_redis_name)
+      redis_name = MultiCache.class_variable_get(:@@multicache_redis_name)
+      raise "Redis not found!" if redis_name.blank?
+      @redis = eval(redis_name)
     end
     @redis
   end
-
+  
   included do
 
     after_save    :destroy_obj_cache
@@ -118,18 +132,18 @@ module MultiCache
     def self.destroy_obj_cache(id)
       # Delete cache for one object only
       prefix = self.fixed_cache_prefix(id)
-      MultiCache.del_from_redis(prefix)
+      multicache_invalidate(prefix)
     end
 
     def self.destroy_class_cache
       # Destroy cache for all objects of this class
       prefix = self.fixed_cache_prefix
-      MultiCache.del_from_redis(prefix)
+      multicache_invalidate(prefix)
     end
 
     def self.destroy_cache_keys
       # Destroy cache for all MultiCache
-      MultiCache.del_from_redis(CACHE_KEY_MASTER_PREFIX)
+      multicache_invalidate(CACHE_KEY_MASTER_PREFIX)
     end
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -158,13 +172,15 @@ module MultiCache
               "must be among #{multi_cache_prefixes}"
       end
     end
-  end
 
-  def self.del_from_redis(prefix_match) 
-    Thread.new do
-      MultiCache.get_redis.keys("#{prefix_match}*").each do |prefix|
-        MultiCache.get_redis.del(prefix)
-        # TODO: Use scan instead of keys
+    def self.multicache_invalidate(prefix, in_bg = true)
+      prefix = prefix.to_s.strip
+      return false if prefix.blank?
+      full_pattern = prefix + "*"
+      if in_bg
+        Invalidation::Sidekiq.push!(full_pattern)
+      else
+        Invalidation::Blocking::multicache_invalidate_sync(full_pattern, block_size = 100)
       end
     end
   end
