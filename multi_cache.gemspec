@@ -5,8 +5,8 @@ require 'multi_cache/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "multi_cache"
-  spec.version       = '0.1.1'
-  spec.authors       = ["Akshay Rao"]
+  spec.version       = '0.1.2'
+  spec.authors       = ["Akshay Rao", "Sonu Kumar"]
   spec.email         = ["14akshayrao@gmail.com"]
 
   spec.summary       = %q{Framework to help you easily manage caches under multiple keys}
