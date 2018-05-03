@@ -116,26 +116,16 @@ module MultiCache
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
     # Cache destruction
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-    def destroy_obj_cache(cb_obj = nil)
-      self.class.destroy_obj_cache(self.id)
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def destroy_obj_cache(category = nil)
+      self.class.destroy_obj_cache(self.id, category)
     end
 
-    def self.destroy_obj_cache(id)
+    def self.destroy_obj_cache(id, category = nil)
       # Delete cache for one object only
       prefix = self.fixed_cache_prefix(id)
-      MultiCache.del_from_redis(prefix)
-    end
-
-    def self.destroy_class_cache
-      # Destroy cache for all objects of this class
-      prefix = self.fixed_cache_prefix
-      MultiCache.del_from_redis(prefix)
-    end
-
-    def self.destroy_cache_keys
-      # Destroy cache for all MultiCache
-      MultiCache.del_from_redis(CACHE_KEY_MASTER_PREFIX)
+      MultiCache.del_from_redis(prefix, category)
     end
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -166,12 +156,11 @@ module MultiCache
     end
   end
 
-  def self.del_from_redis(prefix_match)
-    Thread.new do
-      MultiCache.get_redis.keys("#{prefix_match}*").each do |prefix|
-        MultiCache.get_redis.del(prefix)
-        # TODO: Use scan instead of keys
-      end
+  def self.del_from_redis(prefix, category)
+    if category.nil?
+      MultiCache.get_redis.del(prefix)
+    else
+      MultiCache.get_redis.hdel(prefix, Array.wrap(category).compact)
     end
   end
 end
