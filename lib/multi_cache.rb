@@ -44,9 +44,9 @@ module MultiCache
   #
   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-  CACHE_KEY_MASTER_PREFIX   = "MultiCache"
-  CACHE_KEY_SEPARATOR       = "_"
-  @@multicache_redis_name   = nil
+  CACHE_KEY_MASTER_PREFIX = 'MultiCache'
+  CACHE_KEY_SEPARATOR = ':'
+  @@multicache_redis_name = nil
 
   def self.configure
     raise ArgumentError, "requires a block" unless block_given?
@@ -66,40 +66,46 @@ module MultiCache
 
   included do
 
-    after_save    :destroy_obj_cache
+    after_save :destroy_obj_cache
     after_destroy :destroy_obj_cache
 
-    def self.get_cached(id_or_obj, cache_prefix)
+    def self.get_cached(id_or_obj, cache_category)
       id_and_obj = get_id_and_obj(id_or_obj)
 
-      validate_cache_prefix(cache_prefix)
+      validate_cache_category(cache_category)
 
-      cache_key = obj_cache_key(id_and_obj[:id], cache_prefix)
-      cached = MultiCache.get_redis.hgetall(cache_key)
+      cache_key = obj_cache_key(id_and_obj[:id])
+      cached_json = MultiCache.get_redis.hget(cache_key, cache_category)
 
-      if cached.blank?
-        cached = gen_cache_content(id_or_obj, cache_prefix)
-
-        raise "the output of GEN_CACHE_CONTENT must be a hash" if !(cached.is_a?Hash)
-        if cached.present?
-          MultiCache.get_redis.hmset(cache_key, *(cached.to_a.reduce([], :+)))
-        end
-        cached = MultiCache.get_redis.hgetall(cache_key)
+      if cached_json.nil?
+        # Not found in cache
+        cached_hash = gen_cache_content(id_or_obj, cache_category)
+        self.write_to_cache(cached_hash, cache_key, cache_category)
+      else
+        cached_hash = JSON.parse(cached_json)
       end
 
-      parse_cache_content(cached, cache_prefix)
+      parse_cache_content(cached_hash, cache_category)
+    end
+
+    def self.write_to_cache(cached_hash, cache_key, cache_category)
+      raise "the output of GEN_CACHE_CONTENT must be a hash" if !(cached_hash.is_a? Hash)
+      if !cached_hash.nil?
+        MultiCache.get_redis.hset(cache_key, cache_category, cached_hash.to_jsons)
+      end
     end
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
     # Cache key determination
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-    def obj_cache_key(cache_prefix)
-      self.class.obj_cache_key(self.id, cache_prefix)
+    def obj_cache_key(id = self.id)
+      self.class.obj_cache_key(id)
     end
 
-    def self.obj_cache_key(id, custom_prefix)
+    def self.obj_cache_key(id)
       # Do not change ordering since we match keys using this
-      [fixed_cache_prefix(id), custom_prefix.to_s].join(CACHE_KEY_SEPARATOR)
+      raise ArgumentError.new 'Key can not be blank' if id.blank?
+      [fixed_cache_prefix(id)].join(CACHE_KEY_SEPARATOR)
     end
 
     def self.fixed_cache_prefix(id = nil)
@@ -152,15 +158,15 @@ module MultiCache
       id_and_obj
     end
 
-    def self.validate_cache_prefix(cache_prefix)
-      if !(multi_cache_prefixes.include?cache_prefix)
-        raise "#{self} Class: cache prefix '#{cache_prefix}' " + 
-              "must be among #{multi_cache_prefixes}"
+    def self.validate_cache_category(cache_category)
+      if !(multi_cache_prefixes.include? cache_category)
+        raise "#{self} Class: cache category '#{cache_category}' " +
+                  "must be among #{multi_cache_prefixes}"
       end
     end
   end
 
-  def self.del_from_redis(prefix_match) 
+  def self.del_from_redis(prefix_match)
     Thread.new do
       MultiCache.get_redis.keys("#{prefix_match}*").each do |prefix|
         MultiCache.get_redis.del(prefix)
