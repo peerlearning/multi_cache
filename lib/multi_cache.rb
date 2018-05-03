@@ -46,6 +46,8 @@ module MultiCache
 
   CACHE_KEY_MASTER_PREFIX = 'MultiCache'
   CACHE_KEY_SEPARATOR = ':'
+  # Three months in seconds
+  MULTICACHE_DEFAULT_TTL = 7776000
   @@multicache_redis_name = nil
 
   def self.configure
@@ -91,7 +93,8 @@ module MultiCache
     def self.write_to_cache(cached_hash, cache_key, cache_category)
       raise "the output of GEN_CACHE_CONTENT must be a hash" if !(cached_hash.is_a? Hash)
       if !cached_hash.nil?
-        MultiCache.get_redis.hset(cache_key, cache_category, cached_hash.to_json)
+        created = MultiCache.get_redis.hset(cache_key, cache_category, cached_hash.to_json)
+        MultiCache.get_redis.expire(cache_key, MULTICACHE_DEFAULT_TTL) if created
       end
     end
 
