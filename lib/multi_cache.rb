@@ -91,7 +91,7 @@ module MultiCache
     def self.write_to_cache(cached_hash, cache_key, cache_category)
       raise "the output of GEN_CACHE_CONTENT must be a hash" if !(cached_hash.is_a? Hash)
       if !cached_hash.nil?
-        MultiCache.get_redis.hset(cache_key, cache_category, cached_hash.to_jsons)
+        MultiCache.get_redis.hset(cache_key, cache_category, cached_hash.to_json)
       end
     end
 
